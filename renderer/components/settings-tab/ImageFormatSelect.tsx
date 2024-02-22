@@ -15,12 +15,6 @@ export function ImageFormatSelect({
 }: ImageFormatSelectProps) {
   const noImageProcessing = useAtomValue(noImageProcessingAtom);
 
-  useEffect(() => {
-    if (noImageProcessing) {
-      setExportType("png");
-    }
-  }, [noImageProcessing]);
-
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-row gap-1">
@@ -47,18 +41,15 @@ export function ImageFormatSelect({
           {/* JPG */}
           <button
             className={`btn ${saveImageAs === "jpg" && "btn-primary"}`}
-            onClick={() => setExportType("jpg")}
-            disabled={noImageProcessing}>
+            onClick={() => setExportType("jpg")}>
             JPG
           </button>
-          {/* WEBP
+          {/* WEBP */}
           <button
-            className={`btn ${
-              saveImageAs === "webp" && "btn-primary"
-            }`}
+            className={`btn ${saveImageAs === "webp" && "btn-primary"}`}
             onClick={() => setExportType("webp")}>
             WEBP
-          </button> */}
+          </button>
         </div>
       </div>
     </div>

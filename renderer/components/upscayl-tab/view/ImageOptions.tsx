@@ -1,4 +1,8 @@
-import React, { useEffect } from "react";
+import { lensSizeAtom, viewTypeAtom } from "@/atoms/userSettingsAtom";
+import SidebarClosed from "@/components/icons/SidebarClosed";
+import SidebarOpened from "@/components/icons/SidebarOpened";
+import { useAtom } from "jotai";
+import React, { useEffect, useState } from "react";
 
 const ImageOptions = ({
   zoomAmount,
@@ -11,6 +15,10 @@ const ImageOptions = ({
   resetImagePaths: () => void;
   hideZoomOptions?: boolean;
 }) => {
+  const [openSidebar, setOpenSidebar] = useState(false);
+  const [viewType, setViewType] = useAtom(viewTypeAtom);
+  const [lensSize, setLensSize] = useAtom(lensSizeAtom);
+
   useEffect(() => {
     if (!localStorage.getItem("zoomAmount")) {
       localStorage.setItem("zoomAmount", zoomAmount);
@@ -20,73 +28,74 @@ const ImageOptions = ({
   }, []);
 
   return (
-    <div className="animate rounded-btn collapse fixed top-1 m-2 z-50 max-w-lg backdrop-blur-lg">
-      <input type="checkbox" className="peer" />
-      {/* <div className="peer-checked:outline-title-none collapse-title bg-opacity-25 text-center text-sm font-semibold uppercase backdrop-blur-2xl peer-checked:bg-base-300 peer-checked:text-base-content"> */}
-      <div className="outline-title peer-checked:outline-title-none collapse-title text-center text-sm font-semibold uppercase text-black mix-blend-difference outline-2 peer-checked:bg-base-300 peer-checked:text-base-content">
-        Show/Hide Image Settings
-      </div>
+    <div
+      onDoubleClick={(e) => {
+        e.stopPropagation();
+      }}
+      className="w-full h-full absolute">
+      <div
+        className={`transition-all duration-500 bg-base-100 text-base-content h-screen w-[28rem] fixed right-0 top-0 z-50 shadow-xl shadow-black ${
+          openSidebar ? "right-0" : "-right-full translate-x-full"
+        }`}>
+        <div
+          className={`transition-all duration-500 bg-base-100 p-4 rounded-btn rounded-r-none absolute top-1/2 right-[100%] z-50 cursor-pointer flex items-center group gap-2`}
+          onClick={() => {
+            setOpenSidebar(!openSidebar);
+          }}>
+          {openSidebar ? (
+            <SidebarOpened className="text-white text-xl" />
+          ) : (
+            <SidebarClosed className="text-white text-xl" />
+          )}
+        </div>
 
-      <div className="collapse-content bg-base-100 text-base-content">
-        <div className="flex max-h-96 flex-col justify-center gap-5 overflow-auto p-5">
+        <div className="flex flex-col justify-center gap-5 overflow-auto p-5">
           <button className="btn-primary btn" onClick={resetImagePaths}>
             Reset Image
           </button>
-          {!hideZoomOptions && (
-            <div className="flex flex-row items-center gap-2">
-              <p className="w-20">Zoom:</p>
-              <button
-                className={`btn-primary btn ${
-                  zoomAmount === "100%" ? "btn-secondary" : "btn-primary"
-                }`}
-                onClick={() => {
-                  setZoomAmount("100%");
-                  localStorage.setItem("zoomAmount", "100%");
-                }}>
-                100%
-              </button>
-              <button
-                className={`btn-primary btn ${
-                  zoomAmount === "125%" ? "btn-secondary" : "btn-primary"
-                }`}
-                onClick={() => {
-                  setZoomAmount("125%");
-                  localStorage.setItem("zoomAmount", "125%");
-                }}>
-                125%
-              </button>
-              <button
-                className={`btn-primary btn ${
-                  zoomAmount === "150%" ? "btn-secondary" : "btn-primary"
-                }`}
-                onClick={() => {
-                  setZoomAmount("150%");
-                  localStorage.setItem("zoomAmount", "150%");
-                }}>
-                150%
-              </button>
-              <button
-                className={`btn-primary btn ${
-                  zoomAmount === "175%" ? "btn-secondary" : "btn-primary"
-                }`}
-                onClick={() => {
-                  setZoomAmount("175%");
-                  localStorage.setItem("zoomAmount", "175%");
-                }}>
-                175%
-              </button>
-              <button
-                className={`btn-primary btn ${
-                  zoomAmount === "200%" ? "btn-secondary" : "btn-primary"
-                }`}
-                onClick={() => {
-                  setZoomAmount("200%");
-                  localStorage.setItem("zoomAmount", "200%");
-                }}>
-                200%
-              </button>
-            </div>
-          )}
+
+          <div className="flex flex-row items-center gap-2">
+            <p className="font-medium text-sm">Lens View</p>
+            <input
+              type="checkbox"
+              className="toggle"
+              onChange={(e) => {
+                setViewType(e.target.checked ? "slider" : "lens");
+              }}
+            />
+            <p className="font-medium text-sm">Slider View</p>
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="font-medium text-sm">Zoom Amount ({zoomAmount}%)</p>
+            <input
+              type="range"
+              min="100"
+              max="1000"
+              step={10}
+              className="range range-md"
+              value={parseInt(zoomAmount)}
+              onChange={(e) => {
+                setZoomAmount(e.target.value);
+                localStorage.setItem("zoomAmount", e.target.value);
+              }}
+            />
+          </div>
+
+          <div className="flex flex-col gap-2">
+            <p className="font-medium text-sm">Lens Size ({lensSize / 10})</p>
+            <input
+              type="range"
+              min="20"
+              max="400"
+              step={10}
+              className="range range-md"
+              value={lensSize}
+              onChange={(e) => {
+                setLensSize(parseInt(e.target.value));
+              }}
+            />
+          </div>
         </div>
       </div>
     </div>

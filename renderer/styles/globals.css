@@ -153,7 +153,7 @@
 }
 
 [data-theme="upscayl"] .btn {
-  @apply font-medium normal-case !min-h-min h-10 py-2 px-3;
+  @apply h-10 !min-h-min px-3 py-2 font-medium normal-case;
 }
 
 [data-theme="upscayl"] input[type="range"] {
@@ -165,15 +165,15 @@
 }
 
 [data-theme="upscayl"] .react-select-container .react-select__single-value {
-  @apply text-primary-content normal-case font-medium;
+  @apply font-medium normal-case text-primary-content;
 }
 
 [data-theme="upscayl"] .react-select-container .react-select__input-container {
-  @apply text-xs text-primary-content normal-case font-medium;
+  @apply text-xs font-medium normal-case text-primary-content;
 }
 
 [data-theme="upscayl"] .react-select-container .react-select__menu {
-  @apply rounded-lg bg-primary p-1 normal-case font-medium;
+  @apply rounded-lg bg-primary p-1 font-medium normal-case;
 }
 
 .mac-titlebar {
@@ -202,6 +202,11 @@
   background-repeat: repeat;
 }
 
+.spinner {
+  -webkit-animation: sk-rotateplane 2.2s infinite ease-in-out;
+  animation: sk-rotateplane 2.2s infinite ease-in-out;
+}
+
 @keyframes animate-step-in {
   0% {
     opacity: 0;
@@ -213,5 +218,32 @@
   100% {
     opacity: 1;
     transform: translateY(0px);
+  }
+}
+
+@-webkit-keyframes sk-rotateplane {
+  0% {
+    -webkit-transform: perspective(120px);
+  }
+  50% {
+    -webkit-transform: perspective(120px) rotateY(360deg);
+  }
+  100% {
+    -webkit-transform: perspective(120px) rotateY(360deg) rotateX(360deg);
+  }
+}
+
+@keyframes sk-rotateplane {
+  0% {
+    transform: perspective(120px) rotateX(0deg) rotateY(0deg);
+    -webkit-transform: perspective(120px) rotateX(0deg) rotateY(0deg);
+  }
+  50% {
+    transform: perspective(120px) rotateX(-360.1deg) rotateY(0deg);
+    -webkit-transform: perspective(120px) rotateX(-360.1deg) rotateY(0deg);
+  }
+  100% {
+    transform: perspective(120px) rotateX(-360deg) rotateY(-179.9deg);
+    -webkit-transform: perspective(120px) rotateX(-360deg) rotateY(-359.9deg);
   }
 }

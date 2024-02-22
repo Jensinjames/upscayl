@@ -1,6 +1,6 @@
 "use client";
-import { useState, useEffect, useCallback } from "react";
-import COMMAND from "../../electron/constants/commands";
+import { useState, useEffect, useCallback, useRef } from "react";
+import COMMAND from "../../common/commands";
 import { ReactCompareSlider } from "react-compare-slider";
 import Header from "../components/Header";
 import Footer from "../components/Footer";
@@ -15,12 +15,15 @@ import { logAtom } from "../atoms/logAtom";
 import { modelsListAtom } from "../atoms/modelsListAtom";
 import {
   batchModeAtom,
+  lensSizeAtom,
   compressionAtom,
   dontShowCloudModalAtom,
   noImageProcessingAtom,
   outputPathAtom,
+  overwriteAtom,
   progressAtom,
   scaleAtom,
+  viewTypeAtom,
 } from "../atoms/userSettingsAtom";
 import useLog from "../components/hooks/useLog";
 import { UpscaylCloudModal } from "../components/UpscaylCloudModal";
@@ -45,12 +48,12 @@ const Home = () => {
   const [version, setVersion] = useState("");
   const [batchFolderPath, setBatchFolderPath] = useState("");
   const [doubleUpscayl, setDoubleUpscayl] = useState(false);
-  const [overwrite, setOverwrite] = useState(false);
+  const overwrite = useAtomValue(overwriteAtom);
   const [upscaledBatchFolderPath, setUpscaledBatchFolderPath] = useState("");
   const [doubleUpscaylCounter, setDoubleUpscaylCounter] = useState(0);
   const [gpuId, setGpuId] = useState("");
   const [saveImageAs, setSaveImageAs] = useState("png");
-  const [zoomAmount, setZoomAmount] = useState("100%");
+  const [zoomAmount, setZoomAmount] = useState("100");
   const [backgroundPosition, setBackgroundPosition] = useState("0% 0%");
   const [dimensions, setDimensions] = useState({
     width: null,
@@ -59,6 +62,8 @@ const Home = () => {
   const [selectedTab, setSelectedTab] = useState(0);
   const [isLoading, setIsLoading] = useState(true);
   const [showCloudModal, setShowCloudModal] = useState(false);
+
+  const [cursorPosition, setCursorPosition] = useState({ x: 0, y: 0 });
 
   // ATOMIC STATES
   const [outputPath, setOutputPath] = useAtom(outputPathAtom);
@@ -69,20 +74,32 @@ const Home = () => {
   const [modelOptions, setModelOptions] = useAtom(modelsListAtom);
   const [scale] = useAtom(scaleAtom);
   const [dontShowCloudModal, setDontShowCloudModal] = useAtom(
-    dontShowCloudModalAtom
+    dontShowCloudModalAtom,
   );
   const noImageProcessing = useAtomValue(noImageProcessingAtom);
   const [news, setNews] = useAtom(newsAtom);
   const [showNewsModal, setShowNewsModal] = useAtom(showNewsModalAtom);
+  const viewType = useAtomValue(viewTypeAtom);
+  const lensSize = useAtomValue(lensSizeAtom);
 
   const { logit } = useLog();
 
-  // * EFFECTS
+  const handleMouseMoveCompare = (e: React.MouseEvent) => {
+    const { left, top, height, width } =
+      e.currentTarget.getBoundingClientRect();
+    const x = e.clientX - left;
+    const y = e.clientY - top;
+    setCursorPosition({ x, y });
+    const xZoom = ((e.pageX - left) / width) * 100;
+    const yZoom = ((e.pageY - top) / height) * 100;
+    setBackgroundPosition(`${xZoom}% ${yZoom}%`);
+  };
+
   // SET CONFIG VARIABLES ON FIRST RUN
   useEffect(() => {
     // UPSCAYL VERSION
     const upscaylVersion = navigator?.userAgent?.match(
-      /Upscayl\/([\d\.]+\d+)/
+      /Upscayl\/([\d\.]+\d+)/,
     )[1];
     setVersion(upscaylVersion);
   }, []);
@@ -92,7 +109,7 @@ const Home = () => {
     const handleErrors = (data: string) => {
       if (data.includes("invalid gpu")) {
         alert(
-          "Error. Please make sure you have a Vulkan compatible GPU (Most modern GPUs support Vulkan). Upscayl does not work with CPU or iGPU sadly."
+          "Error. Please make sure you have a Vulkan compatible GPU (Most modern GPUs support Vulkan). Upscayl does not work with CPU or iGPU sadly.",
         );
         resetImagePaths();
       } else if (data.includes("failed")) {
@@ -100,12 +117,12 @@ const Home = () => {
         alert(
           data.includes("encode")
             ? `ENCODING ERROR: ${data}. For troubleshooting, please read the Upscayl Wiki.`
-            : `DECODING ERROR: ${data}. Additional Info: This image is possibly corrupt or not supported by Upscayl, or your GPU drivers are acting funny (PLEASE READ THE UPSCAYL WIKI). You could try converting the image into another format and upscaling again. Also make sure that the output path is correct and you have the proper write permissions for the directory. If not, then unfortunately there's not much we can do to help, sorry.`
+            : `DECODING ERROR: ${data}. Additional Info: This image is possibly corrupt or not supported by Upscayl, or your GPU drivers are acting funny (PLEASE READ THE UPSCAYL WIKI). You could try converting the image into another format and upscaling again. Also make sure that the output path is correct and you have the proper write permissions for the directory. If not, then unfortunately there's not much we can do to help, sorry.`,
         );
         resetImagePaths();
       } else if (data.includes("uncaughtException")) {
         alert(
-          "Upscayl encountered an error. Possibly, the upscayl binary failed to execute the commands properly. Try checking the logs to see if you get any information. You can post an issue on Upscayl's GitHub repository for more help."
+          "Upscayl encountered an error. Possibly, the upscayl binary failed to execute the commands properly. Try checking the logs to see if you get any information. You can post an issue on Upscayl's GitHub repository for more help.",
         );
         resetImagePaths();
       }
@@ -117,7 +134,7 @@ const Home = () => {
         if (data) {
           setOs(data);
         }
-      }
+      },
     );
     // LOG
     window.electron.on(COMMAND.LOG, (_, data: string) => {
@@ -200,7 +217,7 @@ const Home = () => {
       const uniqueModelOptions = combinedModelOptions.filter(
         // Check if any model in the array appears more than once
         (model, index, array) =>
-          array.findIndex((t) => t.value === model.value) === index
+          array.findIndex((t) => t.value === model.value) === index,
       );
       setModelOptions(uniqueModelOptions);
     });
@@ -209,7 +226,7 @@ const Home = () => {
   // FETCH CUSTOM MODELS FROM CUSTOM MODELS PATH
   useEffect(() => {
     const customModelsPath = JSON.parse(
-      localStorage.getItem("customModelsPath")
+      localStorage.getItem("customModelsPath"),
     );
     if (customModelsPath !== null) {
       window.electron.send(COMMAND.GET_MODELS_LIST, customModelsPath);
@@ -219,9 +236,9 @@ const Home = () => {
 
   // FETCH NEWS
   useEffect(() => {
-    // TODO: Disable on no internet
+    // TODO: ADD AN ABOUT TAB
+    if (window && window.navigator.onLine === false) return;
     try {
-      return;
       fetch("https://raw.githubusercontent.com/upscayl/upscayl/main/news.md", {
         cache: "no-cache",
       })
@@ -262,15 +279,6 @@ const Home = () => {
   useEffect(() => {
     const rememberOutputFolder = localStorage.getItem("rememberOutputFolder");
     const lastOutputFolderPath = localStorage.getItem("lastOutputFolderPath");
-    // GET OVERWRITE
-    if (!localStorage.getItem("overwrite")) {
-      localStorage.setItem("overwrite", JSON.stringify(overwrite));
-    } else {
-      const currentlySavedOverwrite = localStorage.getItem("overwrite");
-      if (currentlySavedOverwrite) {
-        setOverwrite(currentlySavedOverwrite === "true");
-      }
-    }
     if (rememberOutputFolder === "true") {
       logit("🧠 Recalling Output Folder: ", lastOutputFolderPath);
       setOutputPath(lastOutputFolderPath);
@@ -279,9 +287,6 @@ const Home = () => {
       localStorage.removeItem("lastOutputFolderPath");
     }
   }, []);
-
-  // IMAGE PATH VALIDATION
-  useEffect(() => {}, [imagePath]);
 
   // LOADING STATE
   useEffect(() => {
@@ -359,7 +364,7 @@ const Home = () => {
     logit("🔀 Model changed: ", e.value);
     localStorage.setItem(
       "model",
-      JSON.stringify({ label: e.label, value: e.value })
+      JSON.stringify({ label: e.label, value: e.value }),
     );
   };
 
@@ -407,7 +412,7 @@ const Home = () => {
       setImagePath(filePath);
       var dirname = filePath.match(/(.*)[\/\\]/)[1] || "";
       logit("🗂 Setting output path: ", dirname);
-      setOutputPath(dirname);
+      if (!featureFlags.APP_STORE_BUILD) setOutputPath(dirname);
       validateImagePath(filePath);
     }
   };
@@ -512,7 +517,7 @@ const Home = () => {
       <img
         src="icon.png"
         alt="Upscayl icon"
-        className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-36 animate-pulse"
+        className="absolute left-1/2 top-1/2 w-36 -translate-x-1/2 -translate-y-1/2 animate-pulse"
       />
     );
   }
@@ -528,16 +533,17 @@ const Home = () => {
           />
         )}
         {window.electron.platform === "mac" && (
-          <div className="pt-8 mac-titlebar"></div>
+          <div className="mac-titlebar pt-8"></div>
         )}
         {/* HEADER */}
         <Header version={version} />
         {!dontShowCloudModal && featureFlags.SHOW_UPSCAYL_CLOUD_INFO && (
           <button
-            className="mb-5 rounded-btn p-1 mx-5 bg-success shadow-lg shadow-success/40 text-slate-50 animate-pulse text-sm"
+            className="rounded-btn mx-5 mb-5 animate-pulse bg-success p-1 text-sm text-slate-50 shadow-lg shadow-success/40"
             onClick={() => {
               setShowCloudModal(true);
-            }}>
+            }}
+          >
             Introducing Upscayl Cloud
           </button>
         )}
@@ -584,8 +590,6 @@ const Home = () => {
             saveImageAs={saveImageAs}
             setSaveImageAs={setSaveImageAs}
             logData={logData}
-            overwrite={overwrite}
-            setOverwrite={setOverwrite}
             os={os}
             show={showCloudModal}
             setShow={setShowCloudModal}
@@ -610,11 +614,11 @@ const Home = () => {
             selectImageHandler();
           }
         }}
-        onPaste={(e) => handlePaste(e)}>
+        onPaste={(e) => handlePaste(e)}
+      >
         {window.electron.platform === "mac" && (
-          <div className="absolute top-0 w-full h-8 mac-titlebar"></div>
+          <div className="mac-titlebar absolute top-0 h-8 w-full"></div>
         )}
-
         {progress.length > 0 &&
         upscaledImagePath.length === 0 &&
         upscaledBatchFolderPath.length === 0 ? (
@@ -625,7 +629,6 @@ const Home = () => {
             stopHandler={stopHandler}
           />
         ) : null}
-
         {/* DEFAULT PANE INFO */}
         {((!batchMode &&
           imagePath.length === 0 &&
@@ -635,7 +638,6 @@ const Home = () => {
             upscaledBatchFolderPath.length === 0)) && (
           <RightPaneInfo version={version} batchMode={batchMode} />
         )}
-
         {/* SHOW SELECTED IMAGE */}
         {!batchMode &&
           upscaledImagePath.length === 0 &&
@@ -661,83 +663,133 @@ const Home = () => {
               />
             </>
           )}
-
         {/* BATCH UPSCALE SHOW SELECTED FOLDER */}
         {batchMode &&
           upscaledBatchFolderPath.length === 0 &&
           batchFolderPath.length > 0 && (
-            <p className="select-none text-neutral-50">
+            <p className="select-none text-base-content">
               <span className="font-bold">Selected folder:</span>{" "}
               {batchFolderPath}
             </p>
           )}
-
         {/* BATCH UPSCALE DONE INFO */}
         {batchMode && upscaledBatchFolderPath.length > 0 && (
-          <>
-            <p className="select-none py-4 font-bold text-neutral-50">
+          <div className="z-50 flex flex-col items-center">
+            <p className="select-none py-4 font-bold text-base-content">
               All done!
             </p>
             <button
-              className="btn btn-primary bg-gradient-blue rounded-btn p-3 font-medium text-white/90 transition-colors"
-              onClick={openFolderHandler}>
+              className="bg-gradient-blue btn btn-primary rounded-btn p-3 font-medium text-white/90 transition-colors"
+              onClick={openFolderHandler}
+            >
               Open Upscayled Folder
             </button>
-          </>
+          </div>
         )}
-
+        <ImageOptions
+          zoomAmount={zoomAmount}
+          setZoomAmount={setZoomAmount}
+          resetImagePaths={resetImagePaths}
+        />
+        {!batchMode &&
+          viewType === "lens" &&
+          upscaledImagePath &&
+          imagePath && (
+            <div
+              className="group relative h-full w-full overflow-hidden"
+              onMouseMove={handleMouseMoveCompare}
+            >
+              <img
+                className={`absolute left-0 top-0 h-full w-full object-contain transition-transform group-hover:scale-[${
+                  zoomAmount + "%"
+                }]`}
+                src={"file:///" + imagePath}
+                style={{
+                  backgroundPosition: "0% 0%",
+                  transformOrigin: backgroundPosition,
+                }}
+              />
+              <div
+                className={`invisible absolute left-0 top-0 h-full w-full bg-white mix-blend-difference group-hover:visible group-hover:scale-[${
+                  zoomAmount + "%"
+                }]`}
+                style={{
+                  clipPath: `circle(${
+                    (lensSize + 2 * (parseInt(zoomAmount) / 100)) /
+                    (parseInt(zoomAmount) / 100)
+                  }px at ${cursorPosition.x}px ${cursorPosition.y}px)`,
+                  backgroundPosition: "0% 0%",
+                  transformOrigin: backgroundPosition,
+                }}
+              />
+              <img
+                className={`absolute h-full w-full object-contain transition-transform group-hover:scale-[${
+                  zoomAmount + "%"
+                }]`}
+                src={"file:///" + upscaledImagePath}
+                style={{
+                  clipPath: `circle(${
+                    (lensSize + parseInt(zoomAmount) / 100) /
+                    (parseInt(zoomAmount) / 100)
+                  }px at ${cursorPosition.x}px ${cursorPosition.y}px)`,
+                  backgroundPosition: backgroundPosition,
+                  transformOrigin: backgroundPosition,
+                }}
+              />
+            </div>
+          )}
         {/* COMPARISON SLIDER */}
-        {!batchMode && imagePath.length > 0 && upscaledImagePath.length > 0 && (
-          <>
-            <ImageOptions
-              zoomAmount={zoomAmount}
-              setZoomAmount={setZoomAmount}
-              resetImagePaths={resetImagePaths}
-            />
-            <ReactCompareSlider
-              itemOne={
-                <>
-                  <p className="absolute bottom-1 left-1 rounded-md bg-black p-1 text-sm font-medium text-white opacity-30">
-                    Original
-                  </p>
+        {!batchMode &&
+          viewType === "slider" &&
+          imagePath.length > 0 &&
+          upscaledImagePath.length > 0 && (
+            <>
+              <ReactCompareSlider
+                itemOne={
+                  <>
+                    <p className="absolute bottom-1 left-1 rounded-md bg-black p-1 text-sm font-medium text-white opacity-30">
+                      Original
+                    </p>
 
-                  <img
-                    /* USE REGEX TO GET THE FILENAME AND ENCODE IT INTO PROPER FORM IN ORDER TO AVOID ERRORS DUE TO SPECIAL CHARACTERS */
-                    src={"file:///" + imagePath}
-                    alt="Original"
-                    onMouseMove={handleMouseMove}
-                    style={{
-                      objectFit: "contain",
-                      backgroundPosition: "0% 0%",
-                      transformOrigin: backgroundPosition,
-                    }}
-                    className={`h-full w-full bg-gradient-to-br from-base-300 to-base-100 transition-transform group-hover:scale-[${zoomAmount}]`}
-                  />
-                </>
-              }
-              itemTwo={
-                <>
-                  <p className="absolute bottom-1 right-1 rounded-md bg-black p-1 text-sm font-medium text-white opacity-30">
-                    Upscayled
-                  </p>
-                  <img
-                    /* USE REGEX TO GET THE FILENAME AND ENCODE IT INTO PROPER FORM IN ORDER TO AVOID ERRORS DUE TO SPECIAL CHARACTERS */
-                    src={"file:///" + upscaledImagePath}
-                    alt="Upscayl"
-                    style={{
-                      objectFit: "contain",
-                      backgroundPosition: "0% 0%",
-                      transformOrigin: backgroundPosition,
-                    }}
-                    onMouseMove={handleMouseMove}
-                    className={`h-full w-full bg-gradient-to-br from-base-300 to-base-100 transition-transform group-hover:scale-[${zoomAmount}]`}
-                  />
-                </>
-              }
-              className="group h-screen"
-            />
-          </>
-        )}
+                    <img
+                      /* USE REGEX TO GET THE FILENAME AND ENCODE IT INTO PROPER FORM IN ORDER TO AVOID ERRORS DUE TO SPECIAL CHARACTERS */
+                      src={"file:///" + imagePath}
+                      alt="Original"
+                      onMouseMove={handleMouseMove}
+                      style={{
+                        objectFit: "contain",
+                        backgroundPosition: "0% 0%",
+                        transformOrigin: backgroundPosition,
+                      }}
+                      className={`h-full w-full bg-gradient-to-br from-base-300 to-base-100 transition-transform group-hover:scale-[${zoomAmount}%]`}
+                    />
+                  </>
+                }
+                itemTwo={
+                  <>
+                    <p className="absolute bottom-1 right-1 rounded-md bg-black p-1 text-sm font-medium text-white opacity-30">
+                      Upscayled
+                    </p>
+                    <img
+                      /* USE REGEX TO GET THE FILENAME AND ENCODE IT INTO PROPER FORM IN ORDER TO AVOID ERRORS DUE TO SPECIAL CHARACTERS */
+                      src={"file:///" + upscaledImagePath}
+                      alt="Upscayl"
+                      style={{
+                        objectFit: "contain",
+                        backgroundPosition: "0% 0%",
+                        transformOrigin: backgroundPosition,
+                      }}
+                      onMouseMove={handleMouseMove}
+                      className={`h-full w-full bg-gradient-to-br from-base-300 to-base-100 transition-transform group-hover:scale-[${
+                        zoomAmount || "100%"
+                      }%]`}
+                    />
+                  </>
+                }
+                className="group h-screen"
+              />
+            </>
+          )}
       </div>
     </div>
   );

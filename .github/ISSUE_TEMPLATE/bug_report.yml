@@ -6,14 +6,11 @@ body:
   attributes:
     label: Checklist
     options:
-      - label: I have checked that this issue isn't addressed in [the FAQ](https://github.com/upscayl/upscayl#-faq).
+      - label: I have **tried ALL** of the steps mentioned in the [troubleshooting guide](https://github.com/upscayl/upscayl/wiki/Troubleshooting).
         required: true
-      - label: I have checked that this issue isn't addressed in any other issue or pull request.
+      - label: I have **searched** for my issue in the [issues tab](https://github.com/upscayl/upscayl/issues?q=).
         required: true
-      - label: I have tried [setting my GPU ID](https://github.com/upscayl/upscayl/wiki/Guide#gpu-id).
-        required: false
-      - label: I am using Windows and I've tried [common troubleshooting steps](https://github.com/upscayl/upscayl/wiki/Troubleshooting).
-    
+      - label: My error involves vkEnumeratePhysicalDevices or vkCreateInstance, which means I should ignore the other issues and file this one despite the last checkbox.
 - type: textarea
   attributes: 
     label: Describe the Bug
@@ -30,18 +27,20 @@ body:
 
 - type: input
   attributes:
-    label: Version (or commit hash)
-    description: ✍️ What version of Upscayl did you use? If you used Mac App Store version, please mention it!
+    label: Upscayl Version (or commit hash)
+    description: ✍️ What version of Upscayl did you use?
   validations:
     required: true
 
 - type: dropdown
   attributes:
-    label: Select your Operating System
-    description: What operating system do you use?
+    label: Platform
+    description: 🧑‍💻 What operating system or distribution platform do you use? Select the last one that applies.
     options:
       - Linux
-      - MacOS
+      - Mac App Store
+      - Mac DMG / Homebrew
+      - Flatpak
       - Windows
   validations:
     required: true
@@ -49,14 +48,14 @@ body:
 - type: input
   attributes:
     label: OS Version
-    description: "What's the version of your operating system? (Example: Ubuntu 22.04, MacOS Monterey or Windows 10)"
+    description: "✍️ For example: Ubuntu 22.04.03, macOS 12.7.3, Windows 11 23H2"
   validations:
     required: true
 
 - type: input
   attributes:
     label: GPU Name
-    description: 📝 What GPU do you have? If you do not know, please just write your device name if it's a laptop.
+    description: 📝 What GPU do you have? If you do not know, please just write the name of your device. If the name is something like "Intel Graphics" or "AMD Vega" and you can't Upscayl images, [STOP and read the 3rd point in the FAQ](https://github.com/upscayl/upscayl?tab=readme-ov-file#-faq). 
   validations:
     required: true
     
@@ -64,18 +63,16 @@ body:
   attributes:
     label: Expected Behavior
     description: 🤓 What should've happened?
-  validations:
-    required: false
     
 - type: textarea
   attributes:
     label: Screenshots
-    description: 🤳 Got screenshots?
+    description: 🤳 Share us your screen!
 
 - type: textarea
   attributes: 
-    label: Paste the logs
-    description: 💥 Paste the logs below ([Guide](https://github.com/upscayl/upscayl/wiki/Guide#logs))
+    label: Logs
+    description: 💥 Paste the logs below. [Here's a Guide if you don't know how to do that](https://github.com/upscayl/upscayl/wiki/Guide#logs).
     render: sh
   validations:
     required: true

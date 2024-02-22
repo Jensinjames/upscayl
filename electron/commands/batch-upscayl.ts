@@ -1,25 +1,30 @@
-import fs, { rmdir } from "fs";
+import fs from "fs";
 import { getMainWindow } from "../main-window";
 import {
   childProcesses,
   customModelsFolderPath,
+  customWidth,
   noImageProcessing,
-  outputFolderPath,
   saveOutputFolder,
   setCompression,
   setNoImageProcessing,
   setStopped,
   stopped,
+  useCustomWidth,
 } from "../utils/config-variables";
 import logit from "../utils/logit";
 import { spawnUpscayl } from "../utils/spawn-upscayl";
 import { getBatchArguments } from "../utils/get-arguments";
 import slash from "../utils/slash";
 import { modelsPath } from "../utils/get-resource-paths";
-import COMMAND from "../constants/commands";
+import COMMAND from "../../common/commands";
 import convertAndScale from "../utils/convert-and-scale";
-import DEFAULT_MODELS from "../constants/models";
 import { BatchUpscaylPayload } from "../../common/types/types";
+import { ImageFormat } from "../utils/types";
+import getModelScale from "../../common/check-model-scale";
+import removeFileExtension from "../utils/remove-file-extension";
+import showNotification from "../utils/show-notification";
+import { DEFAULT_MODELS } from "../../common/models-list";
 
 const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
   const mainWindow = getMainWindow();
@@ -27,43 +32,40 @@ const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
   // GET THE MODEL
   const model = payload.model;
   const gpuId = payload.gpuId;
-  const saveImageAs = payload.saveImageAs;
-
+  const saveImageAs = payload.saveImageAs as ImageFormat;
+  console.log("PAYLOAD: ", payload);
   // GET THE IMAGE DIRECTORY
   let inputDir = payload.batchFolderPath;
   // GET THE OUTPUT DIRECTORY
-  let outputDir = payload.outputPath;
+  let outputFolderPath = payload.outputPath;
   if (saveOutputFolder === true && outputFolderPath) {
-    outputDir = outputFolderPath;
+    outputFolderPath = outputFolderPath;
   }
-
+  // ! Don't do fetchLocalStorage() again, it causes the values to be reset
   setNoImageProcessing(payload.noImageProcessing);
   setCompression(parseInt(payload.compression));
 
   const isDefaultModel = DEFAULT_MODELS.includes(model);
 
-  let initialScale = "4";
-  if (model.includes("x1")) {
-    initialScale = "1";
-  } else if (model.includes("x2")) {
-    initialScale = "2";
-  } else if (model.includes("x3")) {
-    initialScale = "3";
-  } else {
-    initialScale = "4";
-  }
-  const desiredScale = payload.scale as string;
+  let initialScale = getModelScale(model);
 
-  outputDir +=
-    slash +
-    `upscayl_${model}_x${noImageProcessing ? initialScale : desiredScale}`;
-  if (!fs.existsSync(outputDir)) {
-    fs.mkdirSync(outputDir, { recursive: true });
+  const desiredScale = useCustomWidth
+    ? customWidth || payload.scale
+    : payload.scale;
+
+  const outputFolderName = `upscayl_${saveImageAs}_${model}_${noImageProcessing ? initialScale : desiredScale}${useCustomWidth ? "px" : "x"}`;
+  outputFolderPath += slash + outputFolderName;
+  if (!fs.existsSync(outputFolderPath)) {
+    fs.mkdirSync(outputFolderPath, { recursive: true });
   }
 
   // Delete .DS_Store files
   fs.readdirSync(inputDir).forEach((file) => {
-    if (file === ".DS_Store") {
+    if (
+      file === ".DS_Store" ||
+      file.toLowerCase() === "desktop.ini" ||
+      file.startsWith(".")
+    ) {
       logit("🗑️ Deleting .DS_Store file");
       fs.unlinkSync(inputDir + slash + file);
     }
@@ -71,35 +73,38 @@ const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
 
   // UPSCALE
   const upscayl = spawnUpscayl(
-    "realesrgan",
     getBatchArguments(
       inputDir,
-      outputDir,
+      outputFolderPath,
       isDefaultModel ? modelsPath : customModelsFolderPath ?? modelsPath,
       model,
       gpuId,
-      "png",
-      initialScale
+      saveImageAs,
+      initialScale,
     ),
-    logit
+    logit,
   );
 
   childProcesses.push(upscayl);
 
   setStopped(false);
   let failed = false;
+  let isAlpha = false;
 
   const onData = (data: any) => {
     if (!mainWindow) return;
     data = data.toString();
     mainWindow.webContents.send(
       COMMAND.FOLDER_UPSCAYL_PROGRESS,
-      data.toString()
+      data.toString(),
     );
     if (data.includes("invalid") || data.includes("failed")) {
       logit("❌ INVALID GPU OR INVALID FILES IN FOLDER - FAILED");
       failed = true;
       upscayl.kill();
+    }
+    if (data.includes("has alpha channel")) {
+      isAlpha = true;
     }
   };
   const onError = (data: any) => {
@@ -107,14 +112,14 @@ const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
     mainWindow.setProgressBar(-1);
     mainWindow.webContents.send(
       COMMAND.FOLDER_UPSCAYL_PROGRESS,
-      data.toString()
+      data.toString(),
     );
     failed = true;
     upscayl.kill();
     mainWindow &&
       mainWindow.webContents.send(
         COMMAND.UPSCAYL_ERROR,
-        "Error upscaling image. Error: " + data
+        "Error upscaling image. Error: " + data,
       );
     return;
   };
@@ -128,29 +133,58 @@ const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
       if (noImageProcessing) {
         logit("🚫 Skipping scaling and converting");
         mainWindow.setProgressBar(-1);
-        mainWindow.webContents.send(COMMAND.FOLDER_UPSCAYL_DONE, outputDir);
+        mainWindow.webContents.send(
+          COMMAND.FOLDER_UPSCAYL_DONE,
+          outputFolderPath,
+        );
         return;
       }
 
       const files = fs.readdirSync(inputDir);
       try {
         files.forEach(async (file) => {
-          console.log("Filename: ", file.slice(0, -3));
+          if (file.startsWith(".") || file === outputFolderName) return;
+          console.log("Filename: ", removeFileExtension(file));
+          let upscaledImagePath = `${outputFolderPath}${slash}${removeFileExtension(
+            file,
+          )}.${saveImageAs}`;
+          let imageIsAlpha = false;
+          if (
+            isAlpha &&
+            saveImageAs === "jpg" &&
+            fs.existsSync(
+              `${outputFolderPath}${slash}${removeFileExtension(file)}.jpg.png`,
+            )
+          ) {
+            imageIsAlpha = true;
+            console.log("This is an Alpha image!");
+            upscaledImagePath = `${outputFolderPath}${slash}${removeFileExtension(file)}.jpg.png`;
+          }
           await convertAndScale(
             inputDir + slash + file,
-            outputDir + slash + file.slice(0, -3) + "png",
-            outputDir + slash + file.slice(0, -3) + saveImageAs,
+            upscaledImagePath,
+            `${outputFolderPath}${slash}${removeFileExtension(
+              file,
+            )}.${saveImageAs}`,
             desiredScale,
             saveImageAs,
-            onError
+            imageIsAlpha,
           );
-          // Remove the png file (default) if the saveImageAs is not png
-          if (saveImageAs !== "png") {
-            logit("Removing output PNG");
-            fs.unlinkSync(outputDir + slash + file.slice(0, -3) + "png");
+          if (
+            isAlpha &&
+            saveImageAs === "jpg" &&
+            fs.existsSync(
+              `${outputFolderPath}${slash}${removeFileExtension(file)}.jpg.png`,
+            )
+          ) {
+            fs.unlinkSync(upscaledImagePath);
           }
         });
-        mainWindow.webContents.send(COMMAND.FOLDER_UPSCAYL_DONE, outputDir);
+        mainWindow.webContents.send(
+          COMMAND.FOLDER_UPSCAYL_DONE,
+          outputFolderPath,
+        );
+        showNotification("Upscayled", "Image upscayled successfully!");
       } catch (error) {
         logit("❌ Error processing (scaling and converting) the image.", error);
         upscayl.kill();
@@ -158,8 +192,9 @@ const batchUpscayl = async (event, payload: BatchUpscaylPayload) => {
           mainWindow.webContents.send(
             COMMAND.UPSCAYL_ERROR,
             "Error processing (scaling and converting) the image. Please report this error on Upscayl GitHub Issues page.\n" +
-              error
+              error,
           );
+        showNotification("Upscayl Failure", "Failed to upscale image!");
       }
     } else {
       upscayl.kill();

@@ -1,20 +1,20 @@
 import fs from "fs";
 import { modelsPath } from "../utils/get-resource-paths";
-import COMMAND from "../constants/commands";
+import COMMAND from "../../common/commands";
 import {
   compression,
   customModelsFolderPath,
+  customWidth,
   folderPath,
   noImageProcessing,
   outputFolderPath,
-  overwrite,
   saveOutputFolder,
   setChildProcesses,
   setCompression,
   setNoImageProcessing,
-  setOverwrite,
   setStopped,
   stopped,
+  useCustomWidth,
 } from "../utils/config-variables";
 import convertAndScale from "../utils/convert-and-scale";
 import { getSingleImageArguments } from "../utils/get-arguments";
@@ -22,9 +22,13 @@ import logit from "../utils/logit";
 import slash from "../utils/slash";
 import { spawnUpscayl } from "../utils/spawn-upscayl";
 import { parse } from "path";
-import DEFAULT_MODELS from "../constants/models";
 import { getMainWindow } from "../main-window";
 import { ImageUpscaylPayload } from "../../common/types/types";
+import { ImageFormat } from "../utils/types";
+import getModelScale from "../../common/check-model-scale";
+import removeFileExtension from "../utils/remove-file-extension";
+import showNotification from "../utils/show-notification";
+import { DEFAULT_MODELS } from "../../common/models-list";
 
 const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
   const mainWindow = getMainWindow();
@@ -34,13 +38,15 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
     return;
   }
 
-  setOverwrite(payload.overwrite);
   setNoImageProcessing(payload.noImageProcessing);
   setCompression(parseInt(payload.compression));
 
   const model = payload.model as string;
   const gpuId = payload.gpuId as string;
-  const saveImageAs = payload.saveImageAs as string;
+  const saveImageAs = payload.saveImageAs as ImageFormat;
+  console.log("🚀 => saveImageAs:", saveImageAs);
+
+  const overwrite = payload.overwrite as boolean;
 
   let inputDir = (payload.imagePath.match(/(.*)[\/\\]/)?.[1] || "") as string;
   let outputDir: string | undefined =
@@ -51,23 +57,16 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
   }
 
   const isDefaultModel = DEFAULT_MODELS.includes(model);
-
+  logit("Is Default Model? : ", isDefaultModel);
   const fullfileName = payload.imagePath.replace(/^.*[\\\/]/, "") as string;
   const fileName = parse(fullfileName).name;
   const fileExt = parse(fullfileName).ext;
 
-  let initialScale = "4";
-  if (model.includes("x1")) {
-    initialScale = "1";
-  } else if (model.includes("x2")) {
-    initialScale = "2";
-  } else if (model.includes("x3")) {
-    initialScale = "3";
-  } else {
-    initialScale = "4";
-  }
+  let initialScale = getModelScale(model);
 
-  const desiredScale = payload.scale;
+  const desiredScale = useCustomWidth
+    ? customWidth || payload.scale
+    : payload.scale;
 
   const outFile =
     outputDir +
@@ -75,7 +74,7 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
     fileName +
     "_upscayl_" +
     (noImageProcessing ? initialScale : desiredScale) +
-    "x_" +
+    (useCustomWidth ? "px_" : "x_") +
     model +
     "." +
     saveImageAs;
@@ -88,8 +87,8 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
       COMMAND.UPSCAYL_DONE,
       outFile.replace(
         /([^/\\]+)$/i,
-        encodeURIComponent(outFile.match(/[^/\\]+$/i)![0])
-      )
+        encodeURIComponent(outFile.match(/[^/\\]+$/i)![0]),
+      ),
     );
   } else {
     logit(
@@ -106,21 +105,20 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
         desiredScale,
         outFile,
         compression,
-      })
+      }),
     );
     const upscayl = spawnUpscayl(
-      "realesrgan",
       getSingleImageArguments(
         inputDir,
         fullfileName,
-        outFile.slice(0, -3) + "png",
+        outFile,
         isDefaultModel ? modelsPath : customModelsFolderPath ?? modelsPath,
         model,
         initialScale,
         gpuId,
-        "png"
+        saveImageAs,
       ),
-      logit
+      logit,
     );
 
     setChildProcesses(upscayl);
@@ -163,8 +161,8 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
             COMMAND.UPSCAYL_DONE,
             outFile.replace(
               /([^/\\]+)$/i,
-              encodeURIComponent(outFile.match(/[^/\\]+$/i)![0])
-            )
+              encodeURIComponent(outFile.match(/[^/\\]+$/i)![0]),
+            ),
           );
           return;
         }
@@ -174,38 +172,36 @@ const imageUpscayl = async (event, payload: ImageUpscaylPayload) => {
         try {
           await convertAndScale(
             inputDir + slash + fullfileName,
-            outFile.slice(0, -3) + "png",
+            isAlpha ? outFile + ".png" : outFile,
             outFile,
             desiredScale,
             saveImageAs,
-            onError
+            isAlpha,
           );
-          // Remove the png file (default) if the saveImageAs is not png
-          fs.access(outFile.slice(0, -3) + "png", fs.constants.F_OK, (err) => {
-            if (!err && saveImageAs !== "png") {
-              logit("🗑 Removing png file");
-              fs.unlinkSync(outFile.slice(0, -3) + "png");
-            }
-          });
+          if (isAlpha && saveImageAs === "jpg") {
+            fs.unlinkSync(outFile + ".png");
+          }
           mainWindow.setProgressBar(-1);
           mainWindow.webContents.send(
             COMMAND.UPSCAYL_DONE,
             outFile.replace(
               /([^/\\]+)$/i,
-              encodeURIComponent(outFile.match(/[^/\\]+$/i)![0])
-            )
+              encodeURIComponent(outFile.match(/[^/\\]+$/i)![0]),
+            ),
           );
+          showNotification("Upscayl", "Image upscayled successfully!");
         } catch (error) {
           logit(
             "❌ Error processing (scaling and converting) the image. Please report this error on GitHub.",
-            error
+            error,
           );
           upscayl.kill();
           mainWindow.webContents.send(
             COMMAND.UPSCAYL_ERROR,
             "Error processing (scaling and converting) the image. Please report this error on Upscayl GitHub Issues page.\n" +
-              error
+              error,
           );
+          showNotification("Upscayl Failure", "Failed to upscale image!");
         }
       }
     };

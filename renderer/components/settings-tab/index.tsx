@@ -12,6 +12,7 @@ import { useAtom, useAtomValue } from "jotai";
 import {
   customModelsPathAtom,
   noImageProcessingAtom,
+  overwriteAtom,
   scaleAtom,
 } from "../../atoms/userSettingsAtom";
 import { modelsListAtom } from "../../atoms/modelsListAtom";
@@ -22,6 +23,8 @@ import { UpscaylCloudModal } from "../UpscaylCloudModal";
 import { ResetSettings } from "./ResetSettings";
 import ProcessImageToggle from "./ProcessImageToggle";
 import { featureFlags } from "@common/feature-flags";
+import TurnOffNotificationsToggle from "./TurnOffNotificationsToggle";
+import { CustomResolutionInput } from "./CustomResolutionInput";
 
 interface IProps {
   batchMode: boolean;
@@ -33,8 +36,6 @@ interface IProps {
   gpuId: string;
   setGpuId: React.Dispatch<React.SetStateAction<string>>;
   logData: string[];
-  overwrite: boolean;
-  setOverwrite: (arg: any) => void;
   os: "linux" | "mac" | "win" | undefined;
   show: boolean;
   setShow: React.Dispatch<React.SetStateAction<boolean>>;
@@ -51,8 +52,6 @@ function SettingsTab({
   saveImageAs,
   setSaveImageAs,
   logData,
-  overwrite,
-  setOverwrite,
   os,
   show,
   setShow,
@@ -73,7 +72,7 @@ function SettingsTab({
   const modelOptions = useAtomValue(modelsListAtom);
   const [scale, setScale] = useAtom(scaleAtom);
   const [noImageProcessing, setNoImageProcessing] = useAtom(
-    noImageProcessingAtom
+    noImageProcessingAtom,
   );
 
   const { logit } = useLog();
@@ -88,7 +87,7 @@ function SettingsTab({
       const currentlySavedImageFormat = localStorage.getItem("saveImageAs");
       logit(
         "⚙️ Getting saveImageAs from localStorage: ",
-        currentlySavedImageFormat
+        currentlySavedImageFormat,
       );
       setSaveImageAs(currentlySavedImageFormat);
     }
@@ -100,11 +99,11 @@ function SettingsTab({
       logit("🔀 Setting model to", modelOptions[0].value);
     } else {
       let currentlySavedModel = JSON.parse(
-        localStorage.getItem("model")
+        localStorage.getItem("model"),
       ) as (typeof modelOptions)[0];
       if (
         modelOptions.find(
-          (model) => model.value === currentlySavedModel.value
+          (model) => model.value === currentlySavedModel.value,
         ) === undefined
       ) {
         localStorage.setItem("model", JSON.stringify(modelOptions[0]));
@@ -115,7 +114,7 @@ function SettingsTab({
       setModel(currentlySavedModel.value);
       logit(
         "⚙️ Getting model from localStorage: ",
-        JSON.stringify(currentlySavedModel)
+        JSON.stringify(currentlySavedModel),
       );
     }
 
@@ -133,14 +132,14 @@ function SettingsTab({
       localStorage.setItem("rememberOutputFolder", "false");
     } else {
       const currentlySavedRememberOutputFolder = localStorage.getItem(
-        "rememberOutputFolder"
+        "rememberOutputFolder",
       );
       logit(
         "⚙️ Getting rememberOutputFolder from localStorage: ",
-        currentlySavedRememberOutputFolder
+        currentlySavedRememberOutputFolder,
       );
       setRememberOutputFolder(
-        currentlySavedRememberOutputFolder === "true" ? true : false
+        currentlySavedRememberOutputFolder === "true" ? true : false,
       );
     }
   }, []);
@@ -168,16 +167,30 @@ function SettingsTab({
     }, 2000);
   };
 
+  const upscaylVersion = navigator?.userAgent?.match(
+    /Upscayl\/([\d\.]+\d+)/,
+  )[1];
+
   return (
-    <div className="animate-step-in animate flex h-screen flex-col gap-7 overflow-y-auto p-5 overflow-x-hidden">
-      <div className="flex flex-col gap-2 text-sm font-medium">
+    <div className="animate-step-in animate flex h-screen flex-col gap-7 overflow-y-auto overflow-x-hidden p-5">
+      <div className="flex flex-col gap-2 text-sm font-medium uppercase">
         <p>Having issues?</p>
         <a
-          className="btn-primary btn"
+          className="btn btn-primary"
           href="https://github.com/upscayl/upscayl/wiki/"
-          target="_blank">
-          Read Wiki Guide
+          target="_blank"
+        >
+          HELP ME!
         </a>
+        {featureFlags.APP_STORE_BUILD && (
+          <a
+            className="btn btn-primary"
+            href={`mailto:upscayl@gmail.com?subject=Upscayl%20Issue%3A%20%3CIssue%20name%20here%3E&body=Device%20Name%3A%20%3CYOUR%20DEVICE%20MODEL%3E%0AOperating%20System%3A%20%3CYOUR%20OPERATING%20SYSTEM%20VERSION%3E%0AUpscayl%20Version%3A%20${upscaylVersion}%0A%0AHi%2C%20I'm%20having%20an%20issue%20with%20Upscayl.%20%3CDESCRIBE%20ISSUE%20HERE%3E`}
+            target="_blank"
+          >
+            EMAIL DEVELOPER
+          </a>
+        )}
         {!featureFlags.APP_STORE_BUILD && <DonateButton />}
       </div>
 
@@ -207,6 +220,8 @@ function SettingsTab({
           {/* IMAGE SCALE */}
           <ImageScaleSelect scale={scale} setScale={setScale} />
 
+          <CustomResolutionInput />
+
           <CompressionInput
             compression={compression}
             handleCompressionChange={handleCompressionChange}
@@ -219,7 +234,8 @@ function SettingsTab({
         setRememberOutputFolder={setRememberOutputFolder}
       />
 
-      <OverwriteToggle overwrite={overwrite} setOverwrite={setOverwrite} />
+      <OverwriteToggle />
+      <TurnOffNotificationsToggle />
 
       {/* GPU ID INPUT */}
       <GpuIdInput gpuId={gpuId} handleGpuIdChange={handleGpuIdChange} />
@@ -236,10 +252,11 @@ function SettingsTab({
       {featureFlags.SHOW_UPSCAYL_CLOUD_INFO && (
         <>
           <button
-            className="mb-5 rounded-btn p-1 mx-5 bg-success shadow-lg shadow-success/40 text-slate-50 animate-pulse text-sm"
+            className="rounded-btn mx-5 mb-5 animate-pulse bg-success p-1 text-sm text-slate-50 shadow-lg shadow-success/40"
             onClick={() => {
               setShow(true);
-            }}>
+            }}
+          >
             Introducing Upscayl Cloud
           </button>
 

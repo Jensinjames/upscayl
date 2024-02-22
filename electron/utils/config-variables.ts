@@ -8,13 +8,15 @@ export let customModelsFolderPath: string | undefined = undefined;
 export let outputFolderPath: string | undefined = undefined;
 export let saveOutputFolder = false;
 export let compression = 0;
-export let overwrite = false;
 export let stopped = false;
 export let childProcesses: {
   process: ChildProcessWithoutNullStreams;
   kill: () => boolean;
 }[] = [];
 export let noImageProcessing: boolean = false;
+export let turnOffNotifications: boolean = false;
+export let customWidth: string | null = null;
+export let useCustomWidth: boolean = false;
 
 export function setImagePath(value: string | undefined): void {
   imagePath = value;
@@ -47,11 +49,6 @@ export function setCompression(value: number): void {
   logit("📐 Updating Compression: ", compression);
 }
 
-export function setOverwrite(value: boolean): void {
-  overwrite = value;
-  logit("📝 Updating Overwrite: ", overwrite);
-}
-
 export function setStopped(value: boolean): void {
   stopped = value;
   logit("🛑 Updating Stopped: ", stopped);
@@ -67,13 +64,28 @@ export function setChildProcesses(value: {
     JSON.stringify({
       binary: childProcesses[0].process.spawnfile,
       args: childProcesses[0].process.spawnargs,
-    })
+    }),
   );
 }
 
 export function setNoImageProcessing(value: boolean): void {
   noImageProcessing = value;
   logit("🖼️ Updating No Image Processing: ", noImageProcessing);
+}
+
+export function setTurnOffNotifications(value: boolean): void {
+  turnOffNotifications = value;
+  logit("🔕 Updating Turn Off Notifications: ", turnOffNotifications);
+}
+
+export function setCustomWidth(value: string | null): void {
+  customWidth = value;
+  logit("📏 Updating Custom Width: ", customWidth);
+}
+
+export function setUseCustomWidth(value: boolean): void {
+  useCustomWidth = value;
+  logit("📏 Updating Use Custom Width: ", useCustomWidth);
 }
 
 // LOCAL STORAGE
@@ -101,7 +113,7 @@ export function fetchLocalStorage(): void {
   mainWindow.webContents
     .executeJavaScript(
       'localStorage.getItem("lastCustomModelsFolderPath");',
-      true
+      true,
     )
     .then((lastCustomModelsFolderPath: string | null) => {
       if (lastCustomModelsFolderPath && lastCustomModelsFolderPath.length > 0) {
@@ -132,20 +144,39 @@ export function fetchLocalStorage(): void {
         setCompression(parseInt(lastSavedCompression));
       }
     });
-  // GET OVERWRITE (BOOLEAN) FROM LOCAL STORAGE
-  mainWindow.webContents
-    .executeJavaScript('localStorage.getItem("overwrite");', true)
-    .then((lastSavedOverwrite: string | null) => {
-      if (lastSavedOverwrite !== null) {
-        setOverwrite(lastSavedOverwrite === "true");
-      }
-    });
   // GET PROCESS IMAGE (BOOLEAN) FROM LOCAL STORAGE
   mainWindow.webContents
     .executeJavaScript('localStorage.getItem("noImageProcessing");', true)
     .then((lastSaved: string | null) => {
       if (lastSaved !== null) {
         setNoImageProcessing(lastSaved === "true");
+      }
+    });
+
+  // GET TURN OFF NOTIFICATIONS (BOOLEAN) FROM LOCAL STORAGE
+  mainWindow.webContents
+    .executeJavaScript('localStorage.getItem("turnOffNotifications");', true)
+    .then((lastSaved: string | null) => {
+      if (lastSaved !== null) {
+        setTurnOffNotifications(lastSaved === "true");
+      }
+    });
+
+  // GET CUSTOM WIDTH (STRING) FROM LOCAL STORAGE
+  mainWindow.webContents
+    .executeJavaScript('localStorage.getItem("customWidth");', true)
+    .then((lastSaved: string | null) => {
+      if (lastSaved !== null) {
+        setCustomWidth(lastSaved);
+      }
+    });
+
+  // GET USE CUSTOM WIDTH (BOOLEAN) FROM LOCAL STORAGE
+  mainWindow.webContents
+    .executeJavaScript('localStorage.getItem("useCustomWidth");', true)
+    .then((lastSaved: string | null) => {
+      if (lastSaved !== null) {
+        setUseCustomWidth(lastSaved === "true");
       }
     });
 }

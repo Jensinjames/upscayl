@@ -12,6 +12,7 @@ import {
   scaleAtom,
 } from "../../../atoms/userSettingsAtom";
 import { featureFlags } from "@common/feature-flags";
+import getModelScale from "@common/check-model-scale";
 
 interface IProps {
   selectImageHandler: () => Promise<void>;
@@ -65,6 +66,9 @@ function LeftPaneImageSteps({
   const [outputPath, setOutputPath] = useAtom(outputPathAtom);
   const [progress, setProgress] = useAtom(progressAtom);
 
+  const [targetWidth, setTargetWidth] = useState<number>(null);
+  const [targetHeight, setTargetHeight] = useState<number>(null);
+
   const { logit } = useLog();
 
   useEffect(() => {
@@ -77,7 +81,7 @@ function LeftPaneImageSteps({
       const currentlySavedImageFormat = localStorage.getItem("saveImageAs");
       logit(
         "⚙️ Getting saveImageAs from localStorage: ",
-        currentlySavedImageFormat
+        currentlySavedImageFormat,
       );
       setSaveImageAs(currentlySavedImageFormat);
     }
@@ -89,13 +93,13 @@ function LeftPaneImageSteps({
       logit("🔀 Setting model to", modelOptions[0].value);
     } else {
       const currentlySavedModel = JSON.parse(
-        localStorage.getItem("model")
+        localStorage.getItem("model"),
       ) as (typeof modelOptions)[0];
       setCurrentModel(currentlySavedModel);
       setModel(currentlySavedModel.value);
       logit(
         "⚙️ Getting model from localStorage: ",
-        JSON.stringify(currentlySavedModel)
+        JSON.stringify(currentlySavedModel),
       );
     }
 
@@ -113,6 +117,11 @@ function LeftPaneImageSteps({
     logit("🔀 Setting model to", currentModel.value);
   }, [currentModel]);
 
+  useEffect(() => {
+    setTargetWidth(getUpscaleResolution().width);
+    setTargetHeight(getUpscaleResolution().height);
+  }, [dimensions.width, dimensions.height, doubleUpscayl, scale]);
+
   const getUpscaleResolution = useCallback(() => {
     const newDimensions = {
       width: dimensions.width,
@@ -123,16 +132,7 @@ function LeftPaneImageSteps({
     let singleScale = parseInt(scale);
 
     if (noImageProcessing) {
-      let initialScale = 4;
-      if (model.includes("x1")) {
-        initialScale = 1;
-      } else if (model.includes("x2")) {
-        initialScale = 2;
-      } else if (model.includes("x3")) {
-        initialScale = 3;
-      } else {
-        initialScale = 4;
-      }
+      let initialScale = parseInt(getModelScale(model));
       doubleScale = initialScale * initialScale;
       singleScale = initialScale;
     }
@@ -157,7 +157,8 @@ function LeftPaneImageSteps({
 
   return (
     <div
-      className={`animate-step-in animate flex h-screen flex-col gap-7 overflow-y-auto p-5 overflow-x-hidden`}>
+      className={`animate-step-in animate flex h-screen flex-col gap-7 overflow-y-auto overflow-x-hidden p-5`}
+    >
       {/* BATCH OPTION */}
       <div className="flex flex-row items-center gap-2">
         <input
@@ -168,11 +169,13 @@ function LeftPaneImageSteps({
             setOutputPath("");
             setProgress("");
             setBatchMode((oldValue) => !oldValue);
-          }}></input>
+          }}
+        ></input>
         <p
           className="mr-1 inline-block cursor-help text-sm"
           data-tooltip-id="tooltip"
-          data-tooltip-content="This will let you Upscayl all files in a folder at once">
+          data-tooltip-content="This will let you Upscayl all files in a folder at once"
+        >
           Batch Upscayl
         </p>
       </div>
@@ -181,8 +184,9 @@ function LeftPaneImageSteps({
       <div data-tooltip-id="tooltip" data-tooltip-content={imagePath}>
         <p className="step-heading">Step 1</p>
         <button
-          className="btn-primary btn"
-          onClick={!batchMode ? selectImageHandler : selectFolderHandler}>
+          className="btn btn-primary"
+          onClick={!batchMode ? selectImageHandler : selectFolderHandler}
+        >
           Select {batchMode ? "Folder" : "Image"}
         </button>
       </div>
@@ -202,7 +206,7 @@ function LeftPaneImageSteps({
             handleModelChange(e);
             setCurrentModel({ label: e.label, value: e.value });
           }}
-          className="react-select-container group-active:w-full focus:w-full group-hover:w-full transition-all"
+          className="react-select-container transition-all group-hover:w-full group-active:w-full focus:w-full"
           classNamePrefix="react-select"
           value={currentModel}
         />
@@ -225,14 +229,16 @@ function LeftPaneImageSteps({
               className="cursor-pointer text-sm"
               onClick={(e) => {
                 setDoubleUpscayl(!doubleUpscayl);
-              }}>
+              }}
+            >
               Double Upscayl
             </p>
             <button
-              className="badge-info badge cursor-help"
+              className="badge badge-neutral badge-sm cursor-help"
               data-tooltip-id="tooltip"
-              data-tooltip-content="Enable this option to get a 16x upscayl (we just run upscayl twice). Note that this may not always work properly with all images, for example, images with really large resolutions.">
-              i
+              data-tooltip-content="Enable this option to get a 16x upscayl (we just run upscayl twice). Note that this may not always work properly with all images, for example, images with really large resolutions."
+            >
+              ?
             </button>
           </div>
         )}
@@ -242,12 +248,27 @@ function LeftPaneImageSteps({
       <div
         className="animate-step-in"
         data-tooltip-content={outputPath}
-        data-tooltip-id="tooltip">
-        <div className="step-heading flex items-center gap-2">
-          <span>Step 3</span>
+        data-tooltip-id="tooltip"
+      >
+        <div className="flex flex-col pb-2">
+          <div className="step-heading flex items-center gap-2">
+            <span className="leading-none">Step 3</span>
+            {featureFlags.APP_STORE_BUILD && (
+              <button
+                className="badge badge-outline badge-sm cursor-pointer"
+                onClick={() =>
+                  alert(
+                    "Due to MacOS App Store security restrictions, Upscayl requires you to select an output folder everytime you start it.\n\nTo avoid this, you can permanently save a default output folder in the Upscayl 'Settings' tab.",
+                  )
+                }
+              >
+                ?
+              </button>
+            )}
+          </div>
           {!outputPath && featureFlags.APP_STORE_BUILD && (
             <div className="text-xs">
-              <span className="bg-base-200 font-medium uppercase text-base-content/50 rounded-btn px-2">
+              <span className="rounded-btn bg-base-200 px-2 font-medium uppercase text-base-content/50">
                 Not selected
               </span>
             </div>
@@ -258,7 +279,7 @@ function LeftPaneImageSteps({
             Defaults to {!batchMode ? "Image's" : "Folder's"} path
           </p>
         )}
-        <button className="btn-primary btn" onClick={outputHandler}>
+        <button className="btn btn-primary" onClick={outputHandler}>
           Set Output Folder
         </button>
       </div>
@@ -279,17 +300,18 @@ function LeftPaneImageSteps({
           </p>
         )}
         <button
-          className="btn-accent btn"
+          className="btn btn-accent"
           onClick={
             progress.length > 0 || !outputPath
               ? () => alert("Please select an output folder first")
               : upscaylHandler
-          }>
+          }
+        >
           {progress.length > 0 ? "Upscayling⏳" : "Upscayl"}
         </button>
       </div>
 
-      <Tooltip className="max-w-sm" id="tooltip" />
+      <Tooltip className="z-50 max-w-sm" id="tooltip" />
     </div>
   );
 }

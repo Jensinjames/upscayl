@@ -3,6 +3,7 @@ import { getMainWindow } from "../main-window";
 import {
   childProcesses,
   customModelsFolderPath,
+  customWidth,
   noImageProcessing,
   outputFolderPath,
   saveOutputFolder,
@@ -10,8 +11,8 @@ import {
   setNoImageProcessing,
   setStopped,
   stopped,
+  useCustomWidth,
 } from "../utils/config-variables";
-import DEFAULT_MODELS from "../constants/models";
 import slash from "../utils/slash";
 import { spawnUpscayl } from "../utils/spawn-upscayl";
 import {
@@ -20,9 +21,14 @@ import {
 } from "../utils/get-arguments";
 import { modelsPath } from "../utils/get-resource-paths";
 import logit from "../utils/logit";
-import COMMAND from "../constants/commands";
+import COMMAND from "../../common/commands";
 import convertAndScale from "../utils/convert-and-scale";
 import { DoubleUpscaylPayload } from "../../common/types/types";
+import { ImageFormat } from "../utils/types";
+import getModelScale from "../../common/check-model-scale";
+import showNotification from "../utils/show-notification";
+import { unlinkSync } from "fs";
+import { DEFAULT_MODELS } from "../../common/models-list";
 
 const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
   const mainWindow = getMainWindow();
@@ -37,7 +43,7 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
     outputDir = outputFolderPath;
   }
   const gpuId = payload.gpuId as string;
-  const saveImageAs = payload.saveImageAs as string;
+  const saveImageAs = payload.saveImageAs as ImageFormat;
 
   setNoImageProcessing(payload.noImageProcessing);
   setCompression(parseInt(payload.compression));
@@ -49,17 +55,11 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
   const fullfileName = imagePath.split(slash).slice(-1)[0] as string;
   const fileName = parse(fullfileName).name;
 
-  let initialScale = "4";
-  if (model.includes("x1")) {
-    initialScale = "1";
-  } else if (model.includes("x2")) {
-    initialScale = "2";
-  } else if (model.includes("x3")) {
-    initialScale = "3";
-  } else {
-    initialScale = "4";
-  }
-  const desiredScale = parseInt(payload.scale) * parseInt(payload.scale);
+  let initialScale = getModelScale(model);
+
+  const desiredScale = useCustomWidth
+    ? customWidth || parseInt(payload.scale) * parseInt(payload.scale)
+    : parseInt(payload.scale) * parseInt(payload.scale);
 
   const outFile =
     outputDir +
@@ -69,14 +69,13 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
     (noImageProcessing
       ? parseInt(initialScale) * parseInt(initialScale)
       : desiredScale) +
-    "x_" +
+    (useCustomWidth ? "px_" : "x_") +
     model +
     "." +
     saveImageAs;
 
   // UPSCALE
   let upscayl = spawnUpscayl(
-    "realesrgan",
     getDoubleUpscaleArguments(
       inputDir,
       fullfileName,
@@ -85,9 +84,9 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
       model,
       gpuId,
       saveImageAs,
-      initialScale
+      initialScale,
     ),
-    logit
+    logit,
   );
 
   childProcesses.push(upscayl);
@@ -124,8 +123,9 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
     mainWindow &&
       mainWindow.webContents.send(
         COMMAND.UPSCAYL_ERROR,
-        "Error upscaling image. Error: " + data
+        "Error upscaling image. Error: " + data,
       );
+    showNotification("Upscayl Failure", "Failed to upscale image!");
     upscayl.kill();
     return;
   };
@@ -144,12 +144,12 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
           isAlpha
             ? (outFile + ".png").replace(
                 /([^/\\]+)$/i,
-                encodeURIComponent((outFile + ".png").match(/[^/\\]+$/i)![0])
+                encodeURIComponent((outFile + ".png").match(/[^/\\]+$/i)![0]),
               )
             : outFile.replace(
                 /([^/\\]+)$/i,
-                encodeURIComponent(outFile.match(/[^/\\]+$/i)![0])
-              )
+                encodeURIComponent(outFile.match(/[^/\\]+$/i)![0]),
+              ),
         );
         return;
       }
@@ -161,29 +161,29 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
           outFile,
           desiredScale.toString(),
           saveImageAs,
-          onError
+          isAlpha,
         );
         mainWindow.setProgressBar(-1);
         mainWindow.webContents.send(
           COMMAND.DOUBLE_UPSCAYL_DONE,
-          isAlpha
-            ? (outFile + ".png").replace(
-                /([^/\\]+)$/i,
-                encodeURIComponent((outFile + ".png").match(/[^/\\]+$/i)![0])
-              )
-            : outFile.replace(
-                /([^/\\]+)$/i,
-                encodeURIComponent(outFile.match(/[^/\\]+$/i)![0])
-              )
+          outFile.replace(
+            /([^/\\]+)$/i,
+            encodeURIComponent(outFile.match(/[^/\\]+$/i)![0]),
+          ),
         );
+        if (isAlpha && saveImageAs === "jpg") {
+          unlinkSync(outFile + ".png");
+        }
+        showNotification("Upscayled", "Image upscayled successfully!");
       } catch (error) {
         logit("❌ Error reading original image metadata", error);
         mainWindow &&
           mainWindow.webContents.send(
             COMMAND.UPSCAYL_ERROR,
             "Error processing (scaling and converting) the image. Please report this error on Upscayl GitHub Issues page.\n" +
-              error
+              error,
           );
+        showNotification("Upscayl Failure", "Failed to upscale image!");
         upscayl.kill();
       }
     }
@@ -196,7 +196,6 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
     if (!failed && !stopped) {
       // UPSCALE
       let upscayl2 = spawnUpscayl(
-        "realesrgan",
         getDoubleUpscaleSecondPassArguments(
           isAlpha,
           outFile,
@@ -204,9 +203,9 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
           model,
           gpuId,
           saveImageAs,
-          initialScale
+          initialScale,
         ),
-        logit
+        logit,
       );
 
       childProcesses.push(upscayl2);
@@ -233,8 +232,9 @@ const doubleUpscayl = async (event, payload: DoubleUpscaylPayload) => {
         mainWindow &&
           mainWindow.webContents.send(
             COMMAND.UPSCAYL_ERROR,
-            "Error upscaling image. Error: " + data
+            "Error upscaling image. Error: " + data,
           );
+        showNotification("Upscayl Failure", "Failed to upscale image!");
         upscayl2.kill();
         return;
       });

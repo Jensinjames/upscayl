@@ -1,0 +1,44 @@
+{
+  "$schema": "https://mintlify.com/schema.json",
+  "name": "Upscayl Docs",
+  "logo": {
+    "dark": "https://raw.githubusercontent.com/upscayl/upscayl/main/resources/icons/128x128.png",
+    "light": "https://raw.githubusercontent.com/upscayl/upscayl/main/resources/icons/128x128.png"
+  },
+  "favicon": "https://raw.githubusercontent.com/upscayl/upscayl/main/resources/icons/128x128.png",
+  "colors": {
+    "primary": "#6366f1",
+    "light": "#6366f1",
+    "dark": "#6366f1"
+  },
+  "topbarLinks": [
+    {
+      "name": "Download",
+      "url": "https://upscayl.org/#download"
+    }
+  ],
+  "topbarCtaButton": {
+    "name": "Home",
+    "url": "https://upscayl.org"
+  },
+  "anchors": [
+    {
+      "name": "GitHub",
+      "icon": "github",
+      "url": "https://github.com/upscayl/"
+    }
+  ],
+  "navigation": [
+    {
+      "group": "Get Started",
+      "pages": [
+        "introduction",
+        "quickstart",
+        "development"
+      ]
+    }
+  ],
+  "footerSocials": {
+    "github": "https://github.com/upscayl/"
+  }
+}
